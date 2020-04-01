@@ -30,7 +30,15 @@
 
 	Config:
 
-		daemon(options)
+		daemon(app_defaults) -> app
+
+			Input:
+				app_name
+				app_env
+				verbose
+			Output:
+				data_dir
+				tmp_dir
 
 	Autoincrement IDs:
 
@@ -38,26 +46,23 @@
 
 ]]
 
-require'$'
 local fs = require'fs'
 local errors = require'errors'
-
-local app
+require'$'
 
 --logging --------------------------------------------------------------------
 
 local logtofile = noop --fw. decl.
 
---NOTE: this replaces `math.log` exposed as `log` by `$`.
-function log(severity, topic, action, ...)
-	local env1 = app.env:sub(1, 1)
+function log(severity, topic, action, fmt, ...)
+	local env1 = app_env:sub(1, 1)
 	local date = date('%Y-%m-%d %H:%M:%S', time())
-	local msg = ... and _(...):gsub('\r?\n', '\n                                             ')
+	local msg = fmt and _(tostring(fmt), ...):gsub('\r?\n', '\n                                             ')
 	local entry = _('%s %s %-6s %-6s %-8s %s\n', env1, date, severity or '', topic or '', action or '', msg or '')
 	if severity ~= '' then
 		logtofile(entry)
 	end
-	if severity ~= '' or app.verbose then
+	if severity ~= '' or verbose then
 		io.stderr:write(entry)
 		io.stderr:flush()
 	end
@@ -71,22 +76,23 @@ function warnif(topic, action, cond, ...)
 	log('WARN', topic, action, ...)
 end
 
-local function pcall_check(errorclass, action, v, ...)
+function check(errorclass, action, v, ...)
 	assert(type(errorclass) == 'string' or errors.is(errorclass))
 	assert(type(action) == 'string')
-	if v then return true, v end
+	if v then return v end
 	local e = errors.new(errorclass, ...)
 	log('ERROR', e.classname, action, e.message)
-	return false, e
-end
-
-function check(...)
-	local ok, v = pcall_check(...)
-	if ok then return v end
-	errors.raise(v)
+	e.logged = true --prevent duplicate logging of the error on a catch-all handler.
+	errors.raise(e)
 end
 
 --filesystem ops -------------------------------------------------------------
+
+--make a path by combining dir and file.
+function indir(dir, file)
+	if dir == '.' then dir = nil end
+	return dir and file and dir..'/'..file or file or dir
+end
 
 function exists(file)
 	local is, err = fs.is(file)
@@ -115,6 +121,7 @@ function mkdir(path)
 	return path
 end
 
+--NOTE: shamelessly changing built-in load() that we never use.
 function load(path) --load a file into a string.
 	return check('fs', 'load', glue.readfile(path))
 end
@@ -224,25 +231,23 @@ end
 
 --init -----------------------------------------------------------------------
 
-function daemon(app_arg)
+function daemon()
 
-	app = app_arg
-
-	assert(app.name, 'app name required')
+	assert(app_name, 'app_name required')
 
 	--cd to base_dir so that we can use relative paths for everything.
 	local exe_dir = fs.exedir()
 	local base_dir = exe_dir..'/../..'
 	check('fs', 'cd', fs.cd(base_dir), 'could not change dir to %s', base_dir)
 
-	data_dir = app.data_dir or app.name
-	tmp_dir  = app.tmp_dir or indir('tmp', app.name)
+	data_dir = data_dir or app_name
+	tmp_dir  = tmp_dir or indir('tmp', app_name)
 
 	mkdir(data_dir)
 	mkdir(tmp_dir)
 
 	--open the logfile.
-	local logfile = indir(data_dir, app.name..'.log')
+	local logfile = indir(data_dir, app_name..'.log')
 	local logf, err = io.open(logfile, 'a+')
 	check('fs', 'open', logf, 'could not open log file %s: %s', logfile, err)
 	--[[local]] function logtofile(s)
@@ -251,10 +256,7 @@ function daemon(app_arg)
 	end
 
 	--require an optional config file.
-	local ok, conf = pcall(require, app.name..'_conf')
-	if ok then
-		update(app, conf)
-	end
+	pcall(require, app_name..'_conf')
 
 	return app
 end
@@ -263,13 +265,9 @@ end
 
 if ngx then
 
+	local our_check = check
 	require'webb'
-
-	function check(...)
-		local ok, v = pcall_check(...)
-		if ok then return v end
-		http_error(500, '%s %s %s', e.classname, action, e.message)
-	end
+	check = our_check
 
 end
 
