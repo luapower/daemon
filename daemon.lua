@@ -3,46 +3,46 @@
 	Daemon API.
 	Written by Cosmin Apreutesei. Public Domain.
 
-	Logging:
+LOGGING
 
-		log()
-		note()
-		nolog()
-		warnif()
+	log()
+	note()
+	nolog()
+	warnif()
 
-	Error handling:
+ERRORS
 
-		check()
+	check()
 
-	Filesystem ops:
+FILESYSTEM
 
-		exists()
-		rm()
-		mv()
-		mkdir()
-		load()
-		save()
-		cp()
-		exec()
-		touch()
-		mtime()
-		dir()
+	exists()
+	rm()
+	mv()
+	mkdir()
+	load()
+	save()
+	cp()
+	exec()
+	touch()
+	mtime()
+	dir()
 
-	Config:
+CONFIG
 
-		daemon(app_defaults) -> app
+	daemon(app_defaults) -> app
 
-			Input:
-				app_name
-				app_env
-				verbose
-			Output:
-				data_dir
-				tmp_dir
+		Input:
+			app_name
+			app_env
+			verbose
+		Output:
+			data_dir
+			tmp_dir
 
-	Autoincrement IDs:
+HAND TOOLS
 
-		gen_id(name[, start]) -> n
+	gen_id(name[, start]) -> n
 
 ]]
 
